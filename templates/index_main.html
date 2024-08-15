@@ -5,6 +5,11 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
+    <h1>Stock Prediction</h1>
+    <h2>Trigger Prediction</h2>
+    <button id="triggerPrediction">Trigger Prediction</button>
+    <p id="triggerStatus"></p>
+
     <h2>Search by Security ID</h2>
     <form id="searchForm">
         <label for="securityID">Security ID:</label>
@@ -21,6 +26,13 @@
 
     <script>
         $(document).ready(function() {
+            $('#triggerPrediction').click(function() {
+                $('#triggerStatus').text('Prediction in progress...');
+                $.post('/trigger_prediction', function(data) {
+                    $('#triggerStatus').text(data.message);
+                });
+            });
+
             $('#searchForm').submit(function(event) {
                 event.preventDefault();
                 var securityID = $('#securityID').val();

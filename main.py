@@ -1,68 +1,13 @@
-import yfinance as yf
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-from keras.src.models import Sequential
-from tensorflow.keras.layers import Dense, LSTM, Dropout, Bidirectional
-from keras.src.callbacks import EarlyStopping
+from concurrent.futures import ThreadPoolExecutor
+
 from bsedata.bse import BSE
-import sqlite3
-from datetime import datetime
 from flask import Flask, jsonify, render_template
 
+from dataclass_db.dataclass_db_executor import insert_stock_quote, fetch_quotes_batch
+from executors.executor import prediction_executor
+from utils.util import get_db_connection
+
 app = Flask(__name__)
-
-
-# Database connection
-def get_db_connection():
-    conn = sqlite3.connect('predicted_prices.db')
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def create_features(data):
-    data['SMA_20'] = data['Close'].rolling(window=20).mean()
-    data['SMA_50'] = data['Close'].rolling(window=50).mean()
-    data['EMA_20'] = data['Close'].ewm(span=20, adjust=False).mean()
-    data['EMA_50'] = data['Close'].ewm(span=50, adjust=False).mean()
-    data['Volume_Mean'] = data['Volume'].rolling(window=20).mean()
-    data.dropna(inplace=True)
-    return data
-
-def predict_max_profit(symbol):
-    stock = yf.download(symbol, start='2010-01-01', end='2023-07-16')
-    stock = create_features(stock)
-    data = stock[['Close', 'SMA_20', 'SMA_50', 'EMA_20', 'EMA_50', 'Volume_Mean']].values
-
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_data = scaler.fit_transform(data)
-
-    x_train, y_train = [], []
-    for i in range(60, len(scaled_data)):
-        x_train.append(scaled_data[i-60:i])
-        y_train.append(scaled_data[i, 0])
-
-    x_train, y_train = np.array(x_train), np.array(y_train)
-
-    model = Sequential()
-    model.add(Bidirectional(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1], x_train.shape[2]))))
-    model.add(Dropout(0.2))
-    model.add(LSTM(units=50))
-    model.add(Dropout(0.2))
-    model.add(Dense(1))
-
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    early_stopping = EarlyStopping(monitor='loss', patience=10, restore_best_weights=True)
-    model.fit(x_train, y_train, epochs=100, batch_size=32, verbose=2, callbacks=[early_stopping])
-
-    last_60_days = stock[['Close', 'SMA_20', 'SMA_50', 'EMA_20', 'EMA_50', 'Volume_Mean']][-60:].values
-    last_60_days_scaled = scaler.transform(last_60_days)
-    x_test = [last_60_days_scaled]
-    x_test = np.array(x_test)
-
-    predicted_price = model.predict(x_test)
-    predicted_price = scaler.inverse_transform(np.concatenate((predicted_price, np.zeros((1, data.shape[1] - 1))), axis=1))[:,0]
-
-    return predicted_price[0]
 
 
 @app.route('/trigger_prediction', methods=['POST'])
@@ -70,29 +15,26 @@ def trigger_prediction():
     b = BSE()
     b.updateScripCodes()
     mutual_funds = b.getScripCodes()
-    conn = get_db_connection()
-    c = conn.cursor()
 
+    # Collect quotes first
     for code, name in mutual_funds.items():
         try:
             quote = b.getQuote(code)
-            stock_symbol = quote.get('securityID')
-            stock_symbol_yahoo = stock_symbol + '.BO'  # Assuming it's a BSE stock
-            predicted_price = predict_max_profit(stock_symbol_yahoo)
-            current_price = float(quote['currentValue'].replace(',', ''))  # Handle comma in numbers
-
-            c.execute('''
-                INSERT INTO predictions (company_name, security_id, current_price, predicted_price, prediction_date)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (quote.get('companyName'), stock_symbol, current_price, predicted_price,
-                  datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-            conn.commit()
-
+            insert_stock_quote(quote)
         except Exception as e:
-            print(f"An error occurred while fetching data for {stock_symbol}: {e}")
+            print(f"An error occurred in getting quote for {code}: {e}")
 
-    conn.close()
-    return jsonify({"message": "Prediction triggered and data stored in database"}), 200
+    # Run prediction_executor simultaneously for 3 different quotes at a time
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        batch = fetch_quotes_batch(3)
+        if len(batch) == 3:
+            executor.submit(prediction_executor, batch[0])
+            executor.submit(prediction_executor, batch[1])
+            executor.submit(prediction_executor, batch[2])
+        else:
+            for quote in batch:
+                executor.submit(prediction_executor, quote)
+    return jsonify({'message': 'Predictions triggered and data stored to DB'}), 200
 
 
 # API endpoint to get stocks with the biggest profit
@@ -118,7 +60,7 @@ def get_top_stocks():
 # Root endpoint with options
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index_main.html')
 
 
 if __name__ == '__main__':
