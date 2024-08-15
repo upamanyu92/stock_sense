@@ -1,10 +1,10 @@
-from concurrent.futures import ThreadPoolExecutor
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from bsedata.bse import BSE
 from flask import Flask, jsonify, render_template
 
-from dataclass_db.dataclass_db_executor import insert_stock_quote, fetch_quotes_batch
-from executors.executor import prediction_executor
+from dataclass_db.dataclass_db_executor import fetch_quotes_batch
+from executors.executor import prediction_executor, data_retriever_executor
 from utils.util import get_db_connection
 
 app = Flask(__name__)
@@ -12,28 +12,31 @@ app = Flask(__name__)
 
 @app.route('/trigger_prediction', methods=['POST'])
 def trigger_prediction():
-    b = BSE()
-    b.updateScripCodes()
-    mutual_funds = b.getScripCodes()
+    offset = 0
+    batch_size = 3
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        future_data_retriever = executor.submit(data_retriever_executor)
+        future_data_retriever.result()
+        futures = []
+        while True:
+            batch = fetch_quotes_batch(batch_size, offset)
+            if len(batch) == 3:
+                logging.info("Batch: ", batch)
+                futures.append(executor.submit(prediction_executor, batch[0].__dict__))
+                futures.append(executor.submit(prediction_executor, batch[1].__dict__))
+                futures.append(executor.submit(prediction_executor, batch[2].__dict__))
+            else:
+                for quote in batch:
+                    logging.info("Quote: ", quote)
+                    executor.submit(prediction_executor, quote)
+                break
+            for future in as_completed(futures):
+                try:
+                    future.result()  # Block until each future is done
+                except Exception as e:
+                    logging.error(f"An error occurred during prediction: {e}")
 
-    # Collect quotes first
-    for code, name in mutual_funds.items():
-        try:
-            quote = b.getQuote(code)
-            insert_stock_quote(quote)
-        except Exception as e:
-            print(f"An error occurred in getting quote for {code}: {e}")
-
-    # Run prediction_executor simultaneously for 3 different quotes at a time
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        batch = fetch_quotes_batch(3)
-        if len(batch) == 3:
-            executor.submit(prediction_executor, batch[0])
-            executor.submit(prediction_executor, batch[1])
-            executor.submit(prediction_executor, batch[2])
-        else:
-            for quote in batch:
-                executor.submit(prediction_executor, quote)
+            offset += batch_size
     return jsonify({'message': 'Predictions triggered and data stored to DB'}), 200
 
 

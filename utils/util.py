@@ -1,9 +1,10 @@
-import os
-import sqlite3
-
 import logging
-from model.training_script import preprocess_data, train_model
+import os
+
 import tensorflow as tf
+
+from model.training_script import preprocess_data, train_model
+from utils.connection_pool import SQLiteConnectionPool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,8 +15,12 @@ def get_db_connection():
     Function to establish a connection to the database and set the row factory.
     Returns a database connection object.
     """
-    conn = sqlite3.connect('utils/stock_predictions.db')
-    conn.row_factory = sqlite3.Row
+    # conn = sqlite3.connect('utils/stock_predictions.db')
+    # conn.row_factory = sqlite3.Row
+    db_path = 'utils/stock_predictions.db'
+    pool = SQLiteConnectionPool(db_path, pool_size=10)
+    conn = pool.get_connection()
+
     return conn
 
 

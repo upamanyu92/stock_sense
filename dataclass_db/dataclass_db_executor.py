@@ -1,5 +1,6 @@
 import sqlite3
 
+from dataclass_db.stock_predictions import StockQuote
 from utils.util import get_db_connection
 
 
@@ -143,22 +144,69 @@ def insert_stock_quote(quote):
         ''', data)
 
         conn.commit()
-        print("Data inserted successfully.")
     except sqlite3.IntegrityError as e:
         print(f"Error occurred: {e}")
     finally:
         conn.close()
 
 
-def fetch_quotes_batch(batch_size):
+def fetch_quotes_batch(batch_size, offset=0):
     conn = get_db_connection()
     c = conn.cursor()
 
     c.execute('''
-        SELECT * FROM stock_quotes WHERE active = 1 LIMIT ?
-    ''', (batch_size,))
+        SELECT * FROM stock_quotes LIMIT ? OFFSET ?
+    ''', (batch_size, offset))
 
     rows = c.fetchall()
     conn.close()
 
-    return rows
+    stock_quotes = [
+        StockQuote(
+            id=row[0],
+            company_name=row[1],
+            current_value=row[2],
+            change=row[3],
+            p_change=row[4],
+            updated_on=row[5],
+            security_id=row[6],
+            scrip_code=row[7],
+            group_type=row[8],
+            face_value=row[9],
+            industry=row[10],
+            previous_close=row[11],
+            previous_open=row[12],
+            day_high=row[13],
+            day_low=row[14],
+            week_52_high=row[15],
+            week_52_low=row[16],
+            weighted_avg_price=row[17],
+            total_traded_value=row[18],
+            total_traded_quantity=row[19],
+            two_week_avg_quantity=row[20],
+            market_cap_full=row[21],
+            market_cap_free_float=row[22],
+            buy_1_quantity=row[23],
+            buy_1_price=row[24],
+            buy_2_quantity=row[25],
+            buy_2_price=row[26],
+            buy_3_quantity=row[27],
+            buy_3_price=row[28],
+            buy_4_quantity=row[29],
+            buy_4_price=row[30],
+            buy_5_quantity=row[31],
+            buy_5_price=row[32],
+            sell_1_quantity=row[33],
+            sell_1_price=row[34],
+            sell_2_quantity=row[35],
+            sell_2_price=row[36],
+            sell_3_quantity=row[37],
+            sell_3_price=row[38],
+            sell_4_quantity=row[39],
+            sell_4_price=row[40],
+            sell_5_quantity=row[41],
+            sell_5_price=row[42]
+        ) for row in rows
+    ]
+
+    return stock_quotes
