@@ -1,33 +1,47 @@
 version: '3.12'
 
+#services:
+#  linear_predict_scheduler:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.scheduler
+#    ports:
+#      - "5001:5001"
+#    volumes:
+#      - .:/app
+#    networks:
+#      - stocknet
+#    environment:
+#      - FLASK_ENV=development
+#
+#  prediction_service:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.app
+#    ports:
+#      - "5002:5002"
+#    volumes:
+#      - .:/app
+#    networks:
+#      - stocknet
+#    environment:
+#      - FLASK_ENV=development
+#
+#  predict_main:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.main
+#    ports:
+#      - "5005:5005"
+#    volumes:
+#      - .:/app
+#    networks:
+#      - stocknet
+#    environment:
+#      - FLASK_ENV=development
+
 services:
-  linear_predict_scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile.scheduler
-    ports:
-      - "5001:5001"
-    volumes:
-      - .:/app
-    networks:
-      - stocknet
-    environment:
-      - FLASK_ENV=development
-
-  prediction_service:
-    build:
-      context: .
-      dockerfile: Dockerfile.app
-    ports:
-      - "5002:5002"
-    volumes:
-      - .:/app
-    networks:
-      - stocknet
-    environment:
-      - FLASK_ENV=development
-
-  predict_main:
+  app:
     build:
       context: .
       dockerfile: Dockerfile.main
@@ -35,11 +49,5 @@ services:
       - "5005:5005"
     volumes:
       - .:/app
-    networks:
-      - stocknet
     environment:
-      - FLASK_ENV=development
-
-networks:
-  stocknet:
-    driver: bridge
+      - FLASK_APP=main.py

@@ -15,20 +15,21 @@ def trigger_prediction():
     offset = 0
     batch_size = 3
     with ThreadPoolExecutor(max_workers=4) as executor:
-        future_data_retriever = executor.submit(data_retriever_executor)
-        future_data_retriever.result()
+        # future_data_retriever = executor.submit(data_retriever_executor)
+        # future_data_retriever.result()
         futures = []
         while True:
             batch = fetch_quotes_batch(batch_size, offset)
             if len(batch) == 3:
-                logging.info("Batch: ", batch)
-                futures.append(executor.submit(prediction_executor, batch[0].__dict__))
-                futures.append(executor.submit(prediction_executor, batch[1].__dict__))
-                futures.append(executor.submit(prediction_executor, batch[2].__dict__))
+                # logging.info("Batch: ", batch)
+                futures.append(executor.submit(data_retriever_executor))
+                # futures.append(executor.submit(prediction_executor, batch[0].__dict__))
+                # futures.append(executor.submit(prediction_executor, batch[1].__dict__))
+                # futures.append(executor.submit(prediction_executor, batch[2].__dict__))
             else:
                 for quote in batch:
-                    logging.info("Quote: ", quote)
-                    executor.submit(prediction_executor, quote)
+                    # logging.info("Quote: ", quote)
+                    executor.submit(prediction_executor, quote.__dict__)
                 break
             for future in as_completed(futures):
                 try:
@@ -59,12 +60,10 @@ def get_top_stocks():
 
     return jsonify(stocks), 200
 
-
-# Root endpoint with options
 @app.route('/')
 def index():
     return render_template('index_main.html')
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5005)
+    app.run(host='0.0.0.0', debug=False, port=5005)
