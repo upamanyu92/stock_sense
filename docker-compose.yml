@@ -1,53 +1,53 @@
 version: '3.12'
 
-#services:
-#  linear_predict_scheduler:
+services:
+  db:
+    build:
+      context: ./stock_sense_storage
+      dockerfile: Dockerfile
+    container_name: db_microservice
+    ports:
+      - "5001:5001"
+    networks:
+      - stock_network
+
+#  stock_data_downloader:
 #    build:
-#      context: .
-#      dockerfile: Dockerfile.scheduler
-#    ports:
-#      - "5001:5001"
-#    volumes:
-#      - .:/app
-#    networks:
-#      - stocknet
-#    environment:
-#      - FLASK_ENV=development
-#
-#  prediction_service:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile.app
+#      context: ./stock_sense_retriever
+#      dockerfile: Dockerfile
+#    container_name: stock_data_downloader_microservice
 #    ports:
 #      - "5002:5002"
-#    volumes:
-#      - .:/app
 #    networks:
-#      - stocknet
-#    environment:
-#      - FLASK_ENV=development
+#      - stock_network
+#    depends_on:
+#      - db
 #
-#  predict_main:
+#  prediction:
 #    build:
-#      context: .
-#      dockerfile: Dockerfile.main
+#      context: ./stock_sense_prediction
+#      dockerfile: Dockerfile
+#    container_name: prediction_microservice
 #    ports:
-#      - "5005:5005"
-#    volumes:
-#      - .:/app
+#      - "5003:5003"
 #    networks:
-#      - stocknet
-#    environment:
-#      - FLASK_ENV=development
+#      - stock_network
+#    depends_on:
+#      - db
+#
+#  ui:
+#    build:
+#      context: ./stock_sense_ui
+#      dockerfile: Dockerfile
+#    container_name: ui_microservice
+#    ports:
+#      - "5004:5004"
+#    networks:
+#      - stock_network
+#    depends_on:
+#      - prediction
+#      - stock_data_downloader
 
-services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile.main
-    ports:
-      - "5005:5005"
-    volumes:
-      - .:/app
-    environment:
-      - FLASK_APP=main.py
+networks:
+  stock_network:
+    driver: bridge
